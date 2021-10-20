@@ -35,3 +35,56 @@ session-file-store 사용 시 해결 방법 -> `req.session.save & req.session.d
 
 => FileStore 파일 쓰기 작동 방식이 Windows와 Unix(Linux) 방식과 달라 작동이 다르게 적용됨.
 `connect-loki` 사용 시 디렉토리 루트에 session-store-db 파일을 만들어 passport 관련 사용자 정보를 확인할 수 있다.
+
+---
+
+- flash (`connect-flash`) - session 저장에 문제 발생
+=> Custom Callback을 통해 문제 해결
+
+```
+main.js
+
+app.post('/auth/login_process', (req, res, next) => {
+    passport.authenticate('local', (err, user, info) => {
+        if (err) next(err);
+        if (!user) {
+            req.session.save(() => {
+                req.flash('error', info.message) // 세션에 저장할 object
+                return req.session.save(() => {
+                    res.redirect('/auth/login');
+                });
+            });
+        }
+        req.logIn(user, (err) => {
+            if (err) return next(err);
+            req.session.save(() => {
+                res.redirect('/');
+                return;
+            });
+        });
+    })(req,res,next)
+})
+```
+
+```
+/router/auth.js
+
+router.get('/login', function (req, res) {
+    var fmsg = req.flash();
+    var feedback = '';
+
+    if (fmsg.error) feedback = fmsg.error;
+
+    var title = 'WEB - login';
+    var list = template.list(req.list);
+    var html = template.HTML(title, list, `
+    <div style="color:red">${feedback}</div>
+    <form action="/auth/login_process" method="post">
+        <p><input type="text" name="email" placeholder="email"></p>
+        <p><input type="password" name="password" placeholder="password"></p>
+        <p><input type="submit" value="login"></p>
+    </form>
+    `, '');
+    res.send(html);
+})
+```
